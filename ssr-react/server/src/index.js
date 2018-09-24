@@ -1,12 +1,37 @@
+import 'babel-polyfill';
 import express from 'express';
+import { matchRoutes } from 'react-router-config';
+import proxy from 'express-http-proxy';
+import Routes from './client/Routes';
 import renderer from './helpers/renderer';
+import createStore from './helpers/createStore';
 
 const app = express();
 
+app.use(
+  '/api', 
+  proxy('http://react-ssr-api.herokuapp.com', {
+    // Just for this API
+    proxyReqOptDecorator(opts) {
+      opts.headers['x-forwarded-host'] = 'localhost:3000';
+      return opts;
+    }
+  })
+);
 app.use(express.static('public'));
 
 app.get('*', (req, res) => {
-  res.send(renderer(req));
+  const store = createStore(req);
+
+  // Return an array of components we need to renders matching the route
+  const promises = matchRoutes(Routes, req.path).map(({ route }) => {
+    return route.loadData ? route.loadData(store) : null;
+  });
+
+  // Render the app only when all promises are complete
+  Promise.all(promises).then(() => {
+    res.send(renderer(req, store));
+  });
 });
 
 app.listen(3000, () => {
