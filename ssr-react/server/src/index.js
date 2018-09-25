@@ -26,6 +26,13 @@ app.get('*', (req, res) => {
   // Return an array of components we need to renders matching the route
   const promises = matchRoutes(Routes, req.path).map(({ route }) => {
     return route.loadData ? route.loadData(store) : null;
+  }).map(promise => {
+    if (promise) {
+      return new Promise((resolve, reject) => {
+        // No matter what, we are always going to resolve the inner promise
+        promise.then(resolve).catch(resolve);
+      });
+    }
   });
 
   // Render the app only when all promises are complete
@@ -33,6 +40,9 @@ app.get('*', (req, res) => {
     const context = {};
     const content = renderer(req, store, context);
     
+    if (context.url) {
+      return res.redirect(302, context.url);
+    }
     if (context.notFound) {
       res.status(404);
     }
